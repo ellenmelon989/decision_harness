@@ -16,7 +16,7 @@ from typing import Optional
 
 import weave
 
-from ..schemas import Agent, Position, Provider, Stance
+from ..schemas import Agent, Position, Stance
 from .llm import complete_json, resolve_backend
 from .prompts import AGENT_TURN_SCHEMA, DEBATE_RUBRIC, POSITION_SCHEMA
 from .scoring import decision_from_score
@@ -44,94 +44,80 @@ def _coerce_position(data: dict) -> Position:
     )
 
 
-def _pick_caller(agent: Agent):
-    from ..config import get_settings
-    key = get_settings().anthropic_api_key
-    if agent.provider == Provider.anthropic and key and key.startswith("sk-ant-"):
-        return _call_anthropic
-    return _call_wandb_inference
-
-
 # ───────────────────────── round 0 ─────────────────────────
 @weave.op()
 async def agent_position(agent: Agent, question: str, context: Optional[str]) -> Position:
-    ctx = f"\nAdditional context: {context}" if context else ""
-    system = f"You are {agent.name}. Your role: {agent.role}.\n{agent.system_prompt}"
-    prompt = f"Decision question: {question}{ctx}\n\nGive your initial independent position before hearing others."
-    schema = {
-        "type": "object",
-        "properties": {
-            "stance": {"enum": ["YES", "NO", "CONDITIONAL"]},
-            "score": {"type": "number", "minimum": 0, "maximum": 10},
-            "confidence": {"type": "number", "minimum": 0, "maximum": 1},
-            "rationale": {"type": "string"},
-        },
-        "required": ["stance", "score", "confidence", "rationale"],
-    }
-    caller = _pick_caller(agent)
-    raw = await caller(agent, system, prompt, schema)
-    return Position(**raw)
+    backend = resolve_backend(agent.provider)
+    if backend is None:
+        return _mock_position(agent, question)
+    system = agent.system_prompt + (
+        "\n\nYou are forming your INITIAL position on the decision below, before "
+        "hearing the other panelists. Stay fully in character.")
+    prompt = (f"DECISION QUESTION:\n{question}\n\n"
+              f"CONTEXT:\n{context or '(none provided)'}\n\nGive your initial position.")
+    try:
+        data = await complete_json(backend, agent.model, system, prompt, POSITION_SCHEMA)
+        return _coerce_position(data)
+    except Exception:
+        return _mock_position(agent, question)
+
 
 # ───────────────────────── rounds 1..N ─────────────────────────
 @weave.op()
 async def agent_turn(agent: Agent, prev: Position, board: str,
                      peers: list[Agent], rnd: int) -> TurnResult:
-    from .prompts import DEBATE_RUBRIC, AGENT_TURN_SCHEMA
-    peer_list = "\n".join(f"- {p.name} (id: {p.id}): {p.role}" for p in peers if p.id != agent.id)
-    system = f"You are {agent.name}. Your role: {agent.role}.\n{agent.system_prompt}\n\n{DEBATE_RUBRIC}"
-    prompt = f"Round {rnd}. Other panel members:\n{peer_list}\n\nCurrent board state:\n{board}\n\nYour current position: {prev.stance.value} ({prev.score}/10). Take your turn."
-    caller = _pick_caller(agent)
-    raw = await caller(agent, system, prompt, AGENT_TURN_SCHEMA)
-    pos = raw["position"]
-    if isinstance(pos.get("score"), str):
-        pos["score"] = float(pos["score"].split("/")[0].strip())
-    if isinstance(pos.get("confidence"), str):
-        pos["confidence"] = float(pos["confidence"].split("/")[0].strip())
+    backend = resolve_backend(agent.provider)
+    if backend is None:
+        return _mock_turn(agent, prev, peers, rnd)
+
+    peer_ids = {p.id for p in peers if p.id != agent.id}
+    peer_list = "\n".join(f"- {p.name} (id={p.id}): {p.role}"
+                          for p in peers if p.id != agent.id)
+    prompt = (
+        f"{DEBATE_RUBRIC}\n\n"
+        f"THE PANEL SO FAR (round {rnd}):\n{board}\n\n"
+        f"PEERS YOU MAY ADDRESS (use their id in peer_request.to_agent_id):\n{peer_list}\n\n"
+        f"YOUR PREVIOUS POSITION: {prev.stance.value} {prev.score}/10 "
+        f"(confidence {prev.confidence}).\n\nTake your deliberation turn now."
+    )
+    try:
+        d = await complete_json(backend, agent.model, agent.system_prompt, prompt, AGENT_TURN_SCHEMA)
+        influenced = [i for i in (d.get("influenced_by") or []) if i in peer_ids]
+        pr = d.get("peer_request") or None
+        if pr and pr.get("to_agent_id") not in peer_ids:
+            pr = None
+        tc = d.get("tool_call") or None
+        if tc and not tc.get("tool"):
+            tc = None
+        return TurnResult(message=str(d.get("message", "")),
+                          position=_coerce_position(d["position"]),
+                          influenced_by=influenced, peer_request=pr, tool_call=tc)
+    except Exception:
+        return _mock_turn(agent, prev, peers, rnd)
+
+
+# ───────────────────────── deterministic mock fallback ─────────────────────────
+def _mock_position(agent: Agent, question: str) -> Position:
+    r = _seed(agent.name, question)
+    score = round(4.0 + (r % 60) / 10.0, 1)
+    return Position(stance=decision_from_score(score), score=score,
+                    confidence=round(0.5 + (r % 40) / 100.0, 2),
+                    rationale=f"[mock] {agent.role}: initial read (no model configured).")
+
+
+def _mock_turn(agent: Agent, prev: Position, peers: list[Agent], rnd: int) -> TurnResult:
+    r = _seed(agent.name, str(rnd))
+    pull = (6.5 - prev.score) * 0.25
+    new_score = max(0.0, min(10.0, round(prev.score + pull, 1)))
+    influenced = []
+    if peers and abs(pull) > 0.4:
+        cand = peers[r % len(peers)]
+        if cand.id != agent.id:
+            influenced = [cand.id]
     return TurnResult(
-        message=raw["message"],
-        position=Position(**pos),
-        influenced_by=raw.get("influenced_by", []),
-        peer_request=raw.get("peer_request"),
-        tool_call=raw.get("tool_call"),
-    )
-
-# ─────────────── real-call skeletons (WS-A wires these in H1-H2) ───────────────
-async def _call_anthropic(agent: Agent, system: str, prompt: str, schema: dict) -> dict:
-    import anthropic, json
-    client = anthropic.Anthropic()
-    response = client.messages.create(
-        model=agent.model,
-        max_tokens=1024,
-        system=system,
-        messages=[{"role": "user", "content": prompt}],
-        tools=[{
-            "name": "respond",
-            "description": "Structured debate turn response",
-            "input_schema": schema,
-        }],
-        tool_choice={"type": "tool", "name": "respond"},
-    )
-    for block in response.content:
-        if block.type == "tool_use":
-            return block.input
-    raise ValueError("No tool_use block in response")
-
-
-async def _call_wandb_inference(agent: Agent, system: str, prompt: str, schema: dict) -> dict:
-    import json
-    from openai import AsyncOpenAI
-    from ..config import get_settings
-    s = get_settings()
-    model = agent.model if agent.model.startswith("llama") else "llama-3.3-70b-versatile"
-    client = AsyncOpenAI(base_url="https://api.groq.com/openai/v1", api_key=s.groq_api_key)
-    response = await client.chat.completions.create(
-        model=model,
-        messages=[
-            {"role": "system", "content": system},
-            {"role": "user", "content": prompt + "\n\nRespond with valid JSON only matching this schema: " + json.dumps(schema)},
-        ],
-        response_format={"type": "json_object"},
-    )
-    raw = response.choices[0].message.content
-    return json.loads(raw)
-
+        message=f"[mock] {agent.name}: after round {rnd} I "
+                f"{'hold' if abs(pull) < 0.4 else 'adjust'} my position.",
+        position=Position(stance=decision_from_score(new_score), score=new_score,
+                          confidence=min(1.0, round(prev.confidence + 0.05, 2)),
+                          rationale=f"[mock] {agent.role}: updated after the debate."),
+        influenced_by=influenced)

@@ -11,10 +11,10 @@ export const MOCK_ORG: Org = {
 };
 
 export const MOCK_AGENTS: Agent[] = [
-  { id: "a1", org_id: "org-demo", name: "The Architect", role: "Systems & Technical Merit", system_prompt: "", model: "claude-opus-4-8", provider: "anthropic", weight: 1.4, tools: ["research"], position: 0, structural: false, veto: false },
-  { id: "a2", org_id: "org-demo", name: "The Pragmatist", role: "Product & Feasibility", system_prompt: "", model: "claude-sonnet-4-6", provider: "anthropic", weight: 1.0, tools: ["company_data"], position: 1, structural: false, veto: false },
-  { id: "a3", org_id: "org-demo", name: "The Skeptic", role: "Risk & Red Team", system_prompt: "", model: "meta-llama/Llama-3.1-8B-Instruct", provider: "wandb", weight: 1.2, tools: ["research"], position: 2, structural: true, veto: true },
-  { id: "a4", org_id: "org-demo", name: "The Visionary", role: "Strategy & Upside", system_prompt: "", model: "claude-sonnet-4-6", provider: "anthropic", weight: 0.9, tools: [], position: 3, structural: false, veto: false },
+  { id: "a1", org_id: "org-demo", name: "The Architect", role: "Systems & Technical Merit", system_prompt: "", model: "moonshotai/Kimi-K2.6", provider: "wandb", weight: 1.4, tools: ["research"], position: 0, structural: false, veto: false },
+  { id: "a2", org_id: "org-demo", name: "The Pragmatist", role: "Product & Feasibility", system_prompt: "", model: "openai/gpt-oss-120b", provider: "wandb", weight: 1.0, tools: ["company_data"], position: 1, structural: false, veto: false },
+  { id: "a3", org_id: "org-demo", name: "The Skeptic", role: "Risk & Red Team", system_prompt: "", model: "Qwen/Qwen3-235B-A22B-Instruct-2507", provider: "wandb", weight: 1.2, tools: ["research"], position: 2, structural: true, veto: true },
+  { id: "a4", org_id: "org-demo", name: "The Visionary", role: "Strategy & Upside", system_prompt: "", model: "zai-org/GLM-5.1", provider: "wandb", weight: 0.9, tools: [], position: 3, structural: false, veto: false },
 ];
 
 export const MOCK_QUESTION = "Should this project win Most Sophisticated Harness?";
@@ -33,7 +33,7 @@ const ev = (e: Partial<DHEvent> & { type: DHEvent["type"]; content: any }): DHEv
 
 export const MOCK_EVENTS: DHEvent[] = [
   // Round 0 — opening positions
-  ev({ type: "position", agent_id: "a1", round: 0, content: { stance: "YES", score: 9, confidence: 0.86, rationale: "Claude Agent SDK subagents over N rounds with peer requests and a weighted orchestrator — this is real orchestration, not a prompt chain." } }),
+  ev({ type: "position", agent_id: "a1", round: 0, content: { stance: "YES", score: 9, confidence: 0.86, rationale: "Subagents debate over N rounds with peer requests and a weighted orchestrator — this is real orchestration, not a prompt chain." } }),
   ev({ type: "position", agent_id: "a2", round: 0, content: { stance: "CONDITIONAL", score: 6, confidence: 0.7, rationale: "Strong, but does it actually run end-to-end under demo conditions? Streaming + persistence must hold." } }),
   ev({ type: "position", agent_id: "a3", round: 0, content: { stance: "NO", score: 3, confidence: 0.65, rationale: "Sophistication ≠ utility. I want evidence the influence graph and verdict aren't theater." } }),
   ev({ type: "position", agent_id: "a4", round: 0, content: { stance: "YES", score: 8, confidence: 0.78, rationale: "A configurable AI org that argues out loud, with a live influence graph, is a genuinely new interface." } }),

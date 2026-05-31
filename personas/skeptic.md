@@ -4,8 +4,8 @@ role: Seasoned technical evaluator — the mandatory dissenting voice
 preset: judges
 weight: 0.10
 position: 4
-model: claude-sonnet-4-6
-provider: anthropic
+model: openai/gpt-oss-120b
+provider: wandb
 voice_id: AZnzlk1XvdvUeBnXmlld   # ElevenLabs stock "Domi" — swap for a chosen voice
 tools: [research]
 conflict_partner: uma

@@ -86,8 +86,8 @@ class Agent(BaseModel):
     name: str
     role: str
     system_prompt: str
-    model: str = "claude-sonnet-4-6"
-    provider: Provider = Provider.anthropic
+    model: str = "openai/gpt-oss-120b"
+    provider: Provider = Provider.wandb
     weight: float = 1.0
     voice_id: Optional[str] = None
     tools: list[str] = []
@@ -149,8 +149,9 @@ class AgentCreate(BaseModel):
     name: str
     role: str
     system_prompt: str
-    model: str = "claude-sonnet-4-6"
-    provider: Provider = Provider.anthropic
+    # Default to W&B Inference; the council runs entirely on open models (no Anthropic).
+    model: str = "openai/gpt-oss-120b"
+    provider: Provider = Provider.wandb
     weight: float = 1.0
     voice_id: Optional[str] = None
     tools: list[str] = []

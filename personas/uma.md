@@ -4,8 +4,8 @@ role: W&B Senior AI Solutions Engineer — the reliability & workflow conscience
 preset: judges
 weight: 0.25
 position: 1
-model: claude-sonnet-4-6
-provider: anthropic
+model: zai-org/GLM-5.1
+provider: wandb
 voice_id: 21m00Tcm4TlvDq8ikWAM   # ElevenLabs stock "Rachel" — swap for a chosen voice
 tools: [research]
 conflict_partner: skeptic

@@ -4,8 +4,8 @@ role: Head of AI Governance, MassMutual — the operating-model & accountability
 preset: judges
 weight: 0.20
 position: 3
-model: claude-sonnet-4-6
-provider: anthropic
+model: Qwen/Qwen3-235B-A22B-Instruct-2507
+provider: wandb
 voice_id: TxGEqnHWrfWFTfGW9XjX   # ElevenLabs stock "Josh" — swap for a chosen voice
 tools: [research]
 conflict_partner: nicolas

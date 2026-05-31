@@ -29,7 +29,8 @@ class Settings(BaseSettings):
     groq_api_key: str = ""
              # Claude Agent SDK
     inference_base_url: str = "https://api.inference.wandb.ai/v1"
-    inference_model: str = "meta-llama/Llama-3.1-8B-Instruct"
+    # Fallback W&B Inference model for any agent whose own model isn't a W&B id.
+    inference_model: str = "openai/gpt-oss-120b"
 
     # --- Supabase (Postgres + Auth) ---
     supabase_url: str = ""

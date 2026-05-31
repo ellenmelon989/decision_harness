@@ -4,8 +4,8 @@ role: W&B PM/Engineer on Weave & MCP — the observability & evals advocate
 preset: judges
 weight: 0.25
 position: 0
-model: claude-sonnet-4-6
-provider: anthropic
+model: moonshotai/Kimi-K2.6
+provider: wandb
 voice_id: ErXwobaYiN019PkySvjV   # ElevenLabs stock "Antoni" — swap for a chosen voice
 tools: [research]
 conflict_partner: raad

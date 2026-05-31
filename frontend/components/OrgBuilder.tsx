@@ -15,7 +15,18 @@ const PRESETS = [
   { key: "custom", label: "Blank / Custom" },
 ];
 
-const BLANK_AGENT: AgentCreateBody = { name: "", role: "", system_prompt: "", weight: 1, provider: "anthropic", tools: [] };
+// The council runs entirely on W&B Inference open models (no Anthropic).
+const WANDB_MODELS = [
+  "openai/gpt-oss-120b",
+  "Qwen/Qwen3-235B-A22B-Instruct-2507",
+  "moonshotai/Kimi-K2.6",
+  "deepseek-ai/DeepSeek-V4-Pro",
+  "zai-org/GLM-5.1",
+  "MiniMaxAI/MiniMax-M2.5",
+  "meta-llama/Llama-3.3-70B-Instruct",
+  "Qwen/Qwen3-30B-A3B-Instruct-2507",
+];
+const BLANK_AGENT: AgentCreateBody = { name: "", role: "", system_prompt: "", weight: 1, provider: "wandb", model: WANDB_MODELS[0], tools: [] };
 
 export function OrgBuilder({
   open, onClose, currentOrg, agents, onOrgsChanged, onAgentsChanged, demo,
@@ -129,9 +140,8 @@ export function OrgBuilder({
                         </div>
                         <textarea rows={2} placeholder="System prompt — how should this seat reason?" value={draft.system_prompt} onChange={(e) => setDraft({ ...draft, system_prompt: e.target.value })} />
                         <div className="row wrapflex" style={{ gap: 8 }}>
-                          <select value={draft.provider} onChange={(e) => setDraft({ ...draft, provider: e.target.value as any })}>
-                            <option value="anthropic">Claude</option>
-                            <option value="wandb">W&B Inference</option>
+                          <select value={draft.model} onChange={(e) => setDraft({ ...draft, model: e.target.value })} title="W&B Inference model">
+                            {WANDB_MODELS.map((m) => <option key={m} value={m}>{m.split("/").pop()}</option>)}
                           </select>
                           <label className="row small muted" style={{ gap: 6 }}>
                             weight

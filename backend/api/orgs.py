@@ -34,11 +34,13 @@ def create_org(body: CreateOrgRequest, user: str = Depends(get_current_user)):
 
 @router.post("/generate", response_model=Org)
 async def generate_org(body: GenerateOrgRequest, user: str = Depends(get_current_user)):
-    name, description, agents = await generate_org_agents(body.prompt)
+    """Synthesize a full panel of agents from a prompt and persist it."""
     repo = get_repo()
-    org = repo.create_org(user, name=name, description=description, preset="generated")
-    for agent in agents:
-        repo.create_agent(org.id, agent)
+    spec = await generate_org_agents(body.prompt)
+    org = repo.create_org(user, name=spec["org_name"],
+                          description=spec.get("description"), preset="generated")
+    for ac in spec["agents"]:
+        repo.create_agent(org.id, ac)
     return org
 
 

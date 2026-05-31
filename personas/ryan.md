@@ -4,8 +4,8 @@ role: WHOOP VP, AI @ Work / Massachusetts AI Coalition — the adoption & builde
 preset: judges
 weight: 0.20
 position: 2
-model: claude-sonnet-4-6
-provider: anthropic
+model: deepseek-ai/DeepSeek-V4-Pro
+provider: wandb
 voice_id: pNInz6obpgDQGcFmaJgB   # ElevenLabs stock "Adam" — swap for a chosen voice
 tools: [research]
 conflict_partner: uma

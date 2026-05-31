@@ -33,39 +33,15 @@ _DEFAULT_MODEL = "claude-sonnet-4-6"  # resolve_backend may downgrade to W&B Inf
 
 
 def _influence(agents: list[Agent], events: list[Event]):
-    """Returns (ranking: list[InfluenceScore], edges: dict[(from,to)->weight]).
-
-    Edge weight = |Δscore| of the influenced agent that round, split equally
-    among the agents they credited. Falls back to 1.0 if score unavailable.
-    """
-    # Build per-agent score history: agent_id -> [score in event order]
-    score_history: dict[str, list[float]] = defaultdict(list)
-    for ev in events:
-        if ev.type in (EventType.position, EventType.position_update) and ev.agent_id:
-            s = ev.content.get("score")
-            if isinstance(s, (int, float)):
-                score_history[ev.agent_id].append(float(s))
-
+    """(ranking, edges). Weight = |Δscore| of influenced agent, split across credited peers."""
     out: Counter = Counter()
     edges: dict[tuple[str, str], float] = defaultdict(float)
-    seen: dict[str, int] = defaultdict(int)  # how many position_updates per agent so far
-
     for ev in events:
-        if ev.type == EventType.position_update and ev.influenced_by and ev.agent_id:
-            aid = ev.agent_id
-            history = score_history.get(aid, [])
-            idx = seen[aid]
-            seen[aid] += 1
-            # delta between this update and the previous score
-            if idx + 1 < len(history):
-                delta = abs(history[idx + 1] - history[idx])
-            else:
-                delta = 1.0
-            share = delta / len(ev.influenced_by) if ev.influenced_by else 0
+        if ev.type == EventType.position_update and ev.influenced_by:
+            w = abs(float(ev.content.get("delta") or 0)) or 0.5
             for src in ev.influenced_by:
-                out[src] += share
-                edges[(src, aid)] += share
-
+                out[src] += w
+                edges[(src, ev.agent_id)] += w
     total = sum(out.values()) or 1
     ranking = [InfluenceScore(agent_id=a.id, influence=round(out.get(a.id, 0) / total, 3))
                for a in agents]
@@ -73,112 +49,50 @@ def _influence(agents: list[Agent], events: list[Event]):
     return ranking, edges
 
 
-def _build_transcript(agents: list[Agent], events: list[Event]) -> str:
+def _structural(positions: dict[str, Position], agents: list[Agent]):
     by_id = {a.id: a for a in agents}
+    majority = Counter(p.stance.value for p in positions.values()).most_common(1)[0][0]
+    dissent = [Dissent(agent_id=aid, stance=p.stance,
+                       why=f"{by_id[aid].role} held {p.stance.value} at {p.score}/10")
+               for aid, p in positions.items() if p.stance.value != majority]
+    ordered = sorted(positions.items(), key=lambda kv: kv[1].score)
+    conflicts: list[Conflict] = []
+    if len(ordered) >= 2 and ordered[-1][1].score - ordered[0][1].score >= 2:
+        lo, hi = ordered[0], ordered[-1]
+        conflicts = [Conflict(between=[lo[0], hi[0]],
+                              issue=f"widest gap: {hi[1].score} vs {lo[1].score} / 10")]
+    return majority, conflicts, dissent
+
+
+def _transcript(events: list[Event], agents: list[Agent]) -> str:
+    by_id = {a.id: a.name for a in agents}
     lines = []
-    for ev in events:
-        name = by_id[ev.agent_id].name if ev.agent_id and ev.agent_id in by_id else "Orchestrator"
-        if ev.type in (EventType.message, EventType.position, EventType.position_update):
-            c = ev.content
-            if "text" in c:
-                lines.append(f"{name}: {c['text']}")
-            elif "rationale" in c:
-                lines.append(f"{name} [{c.get('stance','?')} {c.get('score','?')}/10]: {c['rationale']}")
-    return "\n".join(lines)
+    for e in events:
+        who = by_id.get(e.agent_id, "Orchestrator")
+        if e.type == EventType.message:
+            lines.append(f"{who}: {e.content.get('text', '')}")
+        elif e.type in (EventType.position, EventType.position_update):
+            lines.append(f"{who} [{e.content.get('stance')} {e.content.get('score')}/10]: "
+                         f"{e.content.get('rationale', '')}")
+    return "\n".join(lines)[:6000]
 
 
-SUMMARY_SCHEMA = {
-    "type": "object",
-    "properties": {
-        "summary": {"type": "string"},
-        "key_agreements": {"type": "array", "items": {"type": "string"}},
-        "key_conflicts": {
-            "type": "array",
-            "items": {
-                "type": "object",
-                "properties": {
-                    "between": {"type": "array", "items": {"type": "string"}},
-                    "issue": {"type": "string"},
-                },
-                "required": ["between", "issue"],
-            },
-        },
-        "dissenting_opinions": {
-            "type": "array",
-            "items": {
-                "type": "object",
-                "properties": {
-                    "agent_id": {"type": "string"},
-                    "stance": {"type": "string"},
-                    "why": {"type": "string"},
-                },
-                "required": ["agent_id", "stance", "why"],
-            },
-        },
-    },
-    "required": ["summary", "key_agreements", "key_conflicts", "dissenting_opinions"],
-}
-
-
-async def _summarize(agents: list[Agent], events: list[Event]) -> dict:
-    from openai import OpenAI
-    from .prompts import ORCHESTRATOR_PROMPT
-
-    transcript = _build_transcript(agents, events)
-    by_id = {a.id: a for a in agents}
-
-    from ..config import get_settings
-    s = get_settings()
-    client = OpenAI(base_url="https://api.groq.com/openai/v1", api_key=s.groq_api_key)
-    response = client.chat.completions.create(
-        model="llama-3.3-70b-versatile",
-        messages=[
-            {"role": "system", "content": ORCHESTRATOR_PROMPT},
-            {"role": "user", "content": f"Transcript:\n{transcript}\n\nWrite a 2-3 sentence summary of the panel's collective judgment. Reply with only the summary text, nothing else."},
-        ],
-    )
-    summary = response.choices[0].message.content.strip()
-
-    # Compute structured fields from event data
-    pos_updates = {ev.agent_id: ev.content for ev in events
-                   if ev.type == EventType.position_update and ev.agent_id}
-    final_stances = {aid: p["stance"] for aid, p in pos_updates.items()}
-    if not final_stances:
-        final_stances = {ev.agent_id: ev.content["stance"] for ev in events
-                         if ev.type == EventType.position and ev.agent_id}
-
-    from collections import Counter as _Counter
-    majority = _Counter(final_stances.values()).most_common(1)[0][0] if final_stances else "CONDITIONAL"
-
-    dissent = [
-        Dissent(
-            agent_id=aid,
-            stance=stance,
-            why=pos_updates.get(aid, {}).get("rationale", "Held a different position"),
-        )
-        for aid, stance in final_stances.items() if stance != majority
-    ]
-
-    scores = {aid: pos_updates[aid]["score"] for aid in pos_updates
-              if isinstance(pos_updates[aid].get("score"), (int, float))}
-    conflicts = []
-    if len(scores) >= 2:
-        lo = min(scores, key=scores.get)
-        hi = max(scores, key=scores.get)
-        if scores[hi] - scores[lo] >= 2:
-            lo_name = by_id[lo].name if lo in by_id else lo
-            hi_name = by_id[hi].name if hi in by_id else hi
-            conflicts = [Conflict(
-                between=[lo, hi],
-                issue=f"{hi_name} scored high; {lo_name} scored low",
-            )]
-
-    return {
-        "summary": summary,
-        "key_agreements": ["Weave instrumentation and observability were recognized as genuine strengths"],
-        "key_conflicts": conflicts,
-        "dissenting_opinions": dissent,
-    }
+async def _summarize(transcript: str, positions: dict[str, Position],
+                     agents: list[Agent]) -> dict:
+    majority, conflicts, dissent = _structural(positions, agents)
+    summary = f"Panel leans {majority} on the weighted vote."
+    agreements: list[str] = []
+    backend = resolve_backend("anthropic")
+    if backend:
+        try:
+            d = await complete_json(backend, _DEFAULT_MODEL, ORCHESTRATOR_PROMPT,
+                                    transcript, SUMMARY_SCHEMA)
+            summary = str(d.get("summary") or summary)
+            agreements = [str(x) for x in (d.get("key_agreements") or [])]
+        except Exception:
+            pass
+    return {"summary": summary, "key_agreements": agreements,
+            "key_conflicts": conflicts, "dissenting_opinions": dissent}
 
 
 @weave.op()
@@ -189,7 +103,7 @@ async def orchestrate_verdict(agents: list[Agent], final_positions: dict[str, Po
     base = decision_from_score(weighted)
     decision = apply_veto_cap(base, agents, final_positions)
     ranking, _ = _influence(agents, events)
-    summary = await _summarize(agents, events)
+    summary = await _summarize(_transcript(events, agents), final_positions, agents)
     if decision != base:
         vetoed_by = ", ".join(
             a.name for a in agents
