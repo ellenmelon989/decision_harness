@@ -4,12 +4,15 @@ Everything degrades gracefully: the app boots even when keys are missing so
 the team can run `GET /health` on day one before all accounts are provisioned.
 """
 from functools import lru_cache
+from pathlib import Path
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+_ENV_FILE = Path(__file__).parent / ".env"
+
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+    model_config = SettingsConfigDict(env_file=str(_ENV_FILE), extra="ignore")
 
     # --- W&B / Weave (already provisioned, see main repo .env) ---
     wandb_api_key: str = ""
@@ -17,7 +20,10 @@ class Settings(BaseSettings):
     wandb_project: str = "company-brain-harness"  # existing Weave project
 
     # --- Models ---
-    anthropic_api_key: str = ""                    # Claude Agent SDK
+    anthropic_api_key: str = ""
+    gemini_api_key: str = ""
+    groq_api_key: str = ""
+             # Claude Agent SDK
     inference_base_url: str = "https://api.inference.wandb.ai/v1"
     inference_model: str = "meta-llama/Llama-3.1-8B-Instruct"
 

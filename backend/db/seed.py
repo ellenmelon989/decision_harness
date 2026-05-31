@@ -8,7 +8,7 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-from ..schemas import AgentCreate
+from ..schemas import AgentCreate, Provider
 
 PERSONAS_DIR = Path(__file__).resolve().parents[2] / "personas"
 
@@ -40,7 +40,9 @@ def load_personas() -> list[AgentCreate]:
         text = path.read_text(encoding="utf-8", errors="ignore")
         name, role, weight = _parse(text, path.stem.title())
         agents.append(AgentCreate(name=name, role=role, system_prompt=text,
-                                  weight=weight, position=i, tools=["research"]))
+                                  weight=weight, position=i, tools=["research"],
+                                  provider=Provider.wandb,
+                                  model="llama-3.3-70b-versatile"))
     return agents
 
 

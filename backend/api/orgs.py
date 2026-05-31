@@ -18,10 +18,14 @@ def create_org(body: CreateOrgRequest, user: str = Depends(get_current_user)):
 
 
 @router.post("/generate", response_model=Org)
-def generate_org(body: GenerateOrgRequest, user: str = Depends(get_current_user)):
-    # TODO(WS-B, H4): call an LLM to synthesize a full agent team from body.prompt
-    # and create each agent. Hour-0 stub returns an empty org so the route exists.
-    return get_repo().create_org(user, name=f"Generated: {body.prompt[:40]}", preset="generated")
+async def generate_org(body: GenerateOrgRequest, user: str = Depends(get_current_user)):
+    from ..engine.org_builder import generate_org_agents
+    name, description, agents = await generate_org_agents(body.prompt)
+    repo = get_repo()
+    org = repo.create_org(user, name=name, description=description, preset="generated")
+    for agent in agents:
+        repo.create_agent(org.id, agent)
+    return org
 
 
 @router.get("/{org_id}/agents", response_model=list[Agent])

@@ -59,14 +59,19 @@ async def run_debate(session: Session, agents: list[Agent], repo,
         turns = await asyncio.gather(
             *[agent_turn(a, positions[a.id], board, agents, rnd) for a in agents])
 
-        for a, t in zip(agents, turns):
+        tool_tasks = [
+            _maybe_call_tool(t.tool_call, session.question) for t in turns
+        ]
+        tool_results = await asyncio.gather(*tool_tasks)
+
+        for a, t, tool_result in zip(agents, turns, tool_results):
             emit(rnd, EventType.message, {"text": t.message, "to": "all"}, agent_id=a.id)
             if t.peer_request:
                 emit(rnd, EventType.peer_request, t.peer_request, agent_id=a.id)
-            if t.tool_call:
+            if t.tool_call and tool_result is not None:
                 tc = emit(rnd, EventType.tool_call, t.tool_call, agent_id=a.id)
                 emit(rnd, EventType.tool_result,
-                     {"tool": t.tool_call["tool"], "result": "[mock] tool output"},
+                     {"tool": t.tool_call["tool"], "result": tool_result},
                      agent_id=a.id, parent=tc.id)
             emit(rnd, EventType.position_update, t.position.model_dump(),
                  agent_id=a.id, influenced=t.influenced_by)
@@ -87,3 +92,13 @@ async def run_debate(session: Session, agents: list[Agent], repo,
                         final_verdict=verdict, weave_trace_url=weave_url)
     stream.close(session.id)
     return verdict
+
+
+async def _maybe_call_tool(tool_call: dict | None, question: str) -> str | None:
+    if not tool_call:
+        return None
+    try:
+        from ..mcp_servers.research import call_tool
+        return await call_tool(tool_call["tool"], tool_call.get("args", {}), question)
+    except Exception:
+        return "[tool unavailable]"
