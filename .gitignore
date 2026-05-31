@@ -10,6 +10,18 @@ wandb/
 node_modules/
 .next/
 frontend/.env.local
+*.tsbuildinfo
+
+# deploy CLI link state (project-local; not shared)
+.vercel/
+.railway/
 
 # misc
 voice/out/
+
+# supabase cli local state (keep supabase/migrations/)
+supabase/.temp/
+supabase/.branches/
+
+# Claude Code personal settings
+.claude/settings.local.json

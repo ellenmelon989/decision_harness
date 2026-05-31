@@ -1,9 +1,12 @@
 """One agent's turn (ROADMAP §7.3).
 
-HOUR 0 = deterministic MOCK so the whole pipeline runs end-to-end with no API
-keys. WS-A replaces the mock bodies with real Claude Agent SDK / W&B Inference
-calls returning AGENT_TURN_SCHEMA — the function signatures and return shapes
-stay identical, so nothing downstream changes.
+Real path: each agent is driven by an LLM (provider-routed in llm.py) and returns
+structured JSON. If no model credentials are configured — or a call fails — we fall
+back to a deterministic MOCK so the pipeline always completes (keyless dev/demo).
+
+WS-A next steps: attach MCP tools per agent (the tool_call flow is already wired in
+tools.py + debate.py) and, for `provider=anthropic`, swap the plain Messages call in
+llm.py for the full Claude Agent SDK so subagents get native MCP tool loops.
 """
 from __future__ import annotations
 
@@ -14,11 +17,9 @@ from typing import Optional
 import weave
 
 from ..schemas import Agent, Position, Provider, Stance
+from .llm import complete_json, resolve_backend
+from .prompts import AGENT_TURN_SCHEMA, DEBATE_RUBRIC, POSITION_SCHEMA
 from .scoring import decision_from_score
-
-
-def _seed(*parts: str) -> int:
-    return int(hashlib.sha256("|".join(parts).encode()).hexdigest()[:12], 16)
 
 
 @dataclass
@@ -26,11 +27,24 @@ class TurnResult:
     message: str
     position: Position
     influenced_by: list[str] = field(default_factory=list)
-    peer_request: Optional[dict] = None      # {"to_agent_id","question"}
-    tool_call: Optional[dict] = None          # {"tool","args"}
+    peer_request: Optional[dict] = None
+    tool_call: Optional[dict] = None
 
 
-# ───────────────────────────── round 0 ─────────────────────────────
+def _seed(*parts: str) -> int:
+    return int(hashlib.sha256("|".join(parts).encode()).hexdigest()[:12], 16)
+
+
+def _coerce_position(data: dict) -> Position:
+    return Position(
+        stance=Stance(str(data["stance"]).upper()),
+        score=max(0.0, min(10.0, float(data["score"]))),
+        confidence=max(0.0, min(1.0, float(data["confidence"]))),
+        rationale=str(data.get("rationale", "")),
+    )
+
+
+# ───────────────────────── round 0 ─────────────────────────
 @weave.op()
 async def agent_position(agent: Agent, question: str, context: Optional[str]) -> Position:
     ctx = f"\nAdditional context: {context}" if context else ""
@@ -50,7 +64,7 @@ async def agent_position(agent: Agent, question: str, context: Optional[str]) ->
     raw = await caller(agent, system, prompt, schema)
     return Position(**raw)
 
-# ───────────────────────────── rounds 1..N ─────────────────────────────
+# ───────────────────────── rounds 1..N ─────────────────────────
 @weave.op()
 async def agent_turn(agent: Agent, prev: Position, board: str,
                      peers: list[Agent], rnd: int) -> TurnResult:

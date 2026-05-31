@@ -16,7 +16,8 @@ from ..schemas import (
     SessionDetail,
     SessionStatus,
 )
-from .deps import get_current_user, require_org_access, require_session_access
+from .deps import (get_current_user, get_current_user_sse, require_org_access,
+                   require_session_access)
 
 router = APIRouter(prefix="/sessions", tags=["sessions"])
 
@@ -57,7 +58,7 @@ def get_session(session_id: str, user: str = Depends(get_current_user)):
 
 @router.get("/{session_id}/stream")
 async def stream_session(session_id: str, request: Request,
-                         user: str = Depends(get_current_user)):
+                         user: str = Depends(get_current_user_sse)):
     repo = get_repo()
     require_session_access(repo, session_id, user)
     q = stream.subscribe(session_id)

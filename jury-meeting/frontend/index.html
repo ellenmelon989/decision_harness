@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Decision Harness — Jury Feedback Meeting</title>
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    @keyframes speakpulse { 0%,100%{box-shadow:0 0 0 0 rgba(34,197,94,.55)} 50%{box-shadow:0 0 0 8px rgba(34,197,94,0)} }
+    .speaking { animation: speakpulse 1.2s infinite; border-color:#22c55e !important; }
+    .tile-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:14px; }
+    @media (max-width:900px){ .tile-grid{ grid-template-columns:repeat(2,minmax(0,1fr)); } }
+    body{ background:#0b0e14; }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+  <script type="text/babel" data-presets="react">
+    const { useState, useRef } = React;
+    const API = "http://localhost:8000";
+
+    const PALETTE = ["#60a5fa","#34d399","#f472b6","#fbbf24","#a78bfa","#f87171","#38bdf8"];
+    const colorFor = (i) => PALETTE[i % PALETTE.length];
+    const initials = (n) => (n||"?").split(" ").map(w=>w[0]).join("").slice(0,2).toUpperCase();
+    const stanceColor = (s) => s==="YES"?"#34d399":s==="NO"?"#f87171":"#fbbf24";
+
+    function Tile({ name, role, score, stance, color, speaking, you }) {
+      const c = you ? "#94a3b8" : color;
+      return (
+        <div className={"relative rounded-xl border-2 bg-[#11151f] p-4 flex flex-col items-center justify-center aspect-video transition "+(speaking?"speaking":"border-[#1f2632]")}>
+          <div className="w-16 h-16 rounded-full flex items-center justify-center text-xl font-bold"
+               style={{background:c+"22", color:c, border:`2px solid ${c}66`}}>
+            {you ? "🧑‍💼" : initials(name)}
+          </div>
+          <div className="mt-2 text-sm font-semibold text-slate-100 text-center">{name}</div>
+          <div className="text-[11px] text-slate-400 text-center px-1">{role}</div>
+          {typeof score==="number" && (
+            <div className="absolute top-2 right-2 text-[10px] px-1.5 py-0.5 rounded-md font-mono"
+                 style={{background:stanceColor(stance)+"22", color:stanceColor(stance)}}>{score}/10</div>
+          )}
+          {speaking && <div className="absolute bottom-2 left-2 text-[10px] text-green-400 font-medium">● speaking</div>}
+        </div>
+      );
+    }
+
+    function JurorBar({ j, color }) {
+      return (
+        <div className="mb-2">
+          <div className="flex justify-between text-[11px] mb-0.5">
+            <span className="text-slate-300">{j.name}</span>
+            <span className="font-mono text-slate-400">{j.score}/10 · w{j.weight}</span>
+          </div>
+          <div className="h-1.5 rounded bg-[#1f2632]">
+            <div className="h-1.5 rounded" style={{width:`${(j.score||0)*10}%`, background:color}}/>
+          </div>
+        </div>
+      );
+    }
+
+    function App() {
+      const [data, setData] = useState(null);
+      const [started, setStarted] = useState(false);
+      const [speaker, setSpeaker] = useState(null);   // name currently speaking
+      const [caption, setCaption] = useState(null);
+      const [question, setQuestion] = useState("");
+      const [busy, setBusy] = useState(false);
+      const audioRef = useRef(new Audio());
+
+      const playQueue = (turns, done) => {
+        let i = 0;
+        const next = () => {
+          if (i >= turns.length) { setSpeaker(null); setCaption(null); done && done(); return; }
+          const t = turns[i++];
+          setSpeaker(t.speaker); setCaption(t);
+          const a = audioRef.current;
+          if (t.audio) {
+            a.src = `${API}/audio/${t.audio}`; a.onended = next;
+            a.play().catch(()=>setTimeout(next, 2600));
+          } else {
+            setTimeout(next, Math.min(7000, 1800 + (t.text||"").length*28));
+          }
+        };
+        next();
+      };
+
+      const start = async () => {
+        setBusy(true);
+        const res = await fetch(`${API}/meeting/init`, {method:"POST", headers:{"Content-Type":"application/json"}, body:"{}"});
+        const d = await res.json();
+        setData(d); setStarted(true); setBusy(false);
+        playQueue(d.openings || []);
+      };
+
+      const ask = async () => {
+        if (!question.trim() || busy) return;
+        const q = question.trim(); setQuestion(""); setBusy(true);
+        const res = await fetch(`${API}/meeting/ask`, {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({question:q})});
+        const t = await res.json(); setBusy(false);
+        playQueue([t]);
+      };
+
+      const jurors = data?.jurors || [];
+      const colorByName = Object.fromEntries(jurors.map((j,i)=>[j.name, colorFor(i)]));
+      const isDecline = data?.verdict==="ELIMINATE";
+      const isCond = data?.verdict==="CONDITIONAL";
+
+      return (
+        <div className="min-h-screen text-slate-100 max-w-6xl mx-auto px-5 py-5">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-3">
+              <div className="text-red-500 text-sm font-bold tracking-wide">● REC</div>
+              <h1 className="text-lg font-semibold">Decision Harness — Jury Feedback Meeting</h1>
+              {data && <span className="text-xs text-slate-500 font-mono">{data.meeting_id}</span>}
+            </div>
+            {data?.trace_url && <a href={data.trace_url} target="_blank"
+               className="text-xs px-3 py-1.5 rounded-lg bg-[#1a2030] border border-[#2a3344] text-amber-300 hover:bg-[#222a3c]">View on Weave ↗</a>}
+          </div>
+
+          {!started ? (
+            <div className="flex flex-col items-center justify-center py-28 text-center">
+              <div className="text-5xl mb-4">⚖️</div>
+              <h2 className="text-2xl font-semibold mb-1">AI Jury Feedback Meeting</h2>
+              <p className="text-slate-400 mb-6 max-w-md">Join the room. The jury explains their decision, and you can ask them anything — every answer is routed to the right juror, traced and graded in Weave.</p>
+              <button onClick={start} disabled={busy}
+                className="px-6 py-3 rounded-xl bg-green-600 hover:bg-green-500 font-semibold disabled:opacity-50">
+                {busy ? "Connecting…" : "Join meeting"}
+              </button>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 lg:grid-cols-[1fr_300px] gap-5">
+              <div>
+                <div className="tile-grid mb-3">
+                  {jurors.map((j,i) => <Tile key={j.name} name={j.name} role={j.role} score={j.score} stance={j.stance} color={colorFor(i)} speaking={speaker===j.name} />)}
+                  <Tile name="You" role={data?.subject?.title || "Applicant"} you speaking={false} />
+                </div>
+
+                {caption && (
+                  <div className="rounded-xl bg-black/40 border border-[#1f2632] px-4 py-3 mb-3">
+                    <div className="text-xs font-semibold mb-0.5" style={{color:colorByName[caption.speaker]||"#94a3b8"}}>{caption.speaker} · {caption.role}{caption.routed_to?" · (routed)":""}</div>
+                    <div className="text-sm text-slate-200">{caption.text}</div>
+                  </div>
+                )}
+
+                <div className="flex gap-2">
+                  <input value={question} onChange={e=>setQuestion(e.target.value)}
+                    onKeyDown={e=>e.key==="Enter"&&ask()}
+                    placeholder="Ask the jury why you were declined…"
+                    className="flex-1 rounded-xl bg-[#11151f] border border-[#2a3344] px-4 py-3 text-sm outline-none focus:border-green-500" />
+                  <button onClick={ask} disabled={busy}
+                    className="px-5 rounded-xl bg-green-600 hover:bg-green-500 font-semibold disabled:opacity-50">Ask</button>
+                </div>
+                <div className="flex flex-wrap gap-2 mt-2">
+                  {["Why is my market unfocused?","Wasn't my team strong?","Is 9% retention really bad?","What was unclear?"].map(q=>(
+                    <button key={q} onClick={()=>setQuestion(q)} className="text-[11px] px-2.5 py-1 rounded-full bg-[#161c28] border border-[#252e3e] text-slate-300 hover:bg-[#1d2533]">{q}</button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="rounded-xl bg-[#11151f] border border-[#1f2632] p-4 h-fit">
+                <div className={"text-center rounded-lg py-3 mb-3 font-bold text-lg "+(isDecline?"bg-red-500/15 text-red-400":isCond?"bg-amber-500/15 text-amber-400":"bg-green-500/15 text-green-400")}>
+                  {isDecline?"DECLINED":isCond?"CONDITIONAL":"ADVANCED"}
+                  <div className="text-xs font-normal text-slate-400 mt-0.5">overall {data.overall_score}/10</div>
+                </div>
+                {data.summary && <p className="text-[11px] text-slate-400 mb-3 leading-snug">{data.summary}</p>}
+                <div className="text-xs font-semibold text-slate-400 mb-2 uppercase tracking-wide">Panel breakdown</div>
+                {jurors.map((j,i) => <JurorBar key={j.name} j={j} color={colorFor(i)} />)}
+              </div>
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    ReactDOM.createRoot(document.getElementById("root")).render(<App/>);
+  </script>
+</body>
+</html>

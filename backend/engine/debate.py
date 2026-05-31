@@ -12,6 +12,7 @@ from . import stream
 from .agent_runner import agent_position, agent_turn
 from .orchestrator import orchestrate_verdict
 from .scoring import normalized_variance
+from .tools import execute_tool
 
 CONVERGE_THRESHOLD = 0.15  # normalized score variance below which we stop early
 
@@ -59,21 +60,20 @@ async def run_debate(session: Session, agents: list[Agent], repo,
         turns = await asyncio.gather(
             *[agent_turn(a, positions[a.id], board, agents, rnd) for a in agents])
 
-        tool_tasks = [
-            _maybe_call_tool(t.tool_call, session.question) for t in turns
-        ]
-        tool_results = await asyncio.gather(*tool_tasks)
-
-        for a, t, tool_result in zip(agents, turns, tool_results):
+        for a, t in zip(agents, turns):
             emit(rnd, EventType.message, {"text": t.message, "to": "all"}, agent_id=a.id)
             if t.peer_request:
                 emit(rnd, EventType.peer_request, t.peer_request, agent_id=a.id)
-            if t.tool_call and tool_result is not None:
+            if t.tool_call:
                 tc = emit(rnd, EventType.tool_call, t.tool_call, agent_id=a.id)
+                result = await execute_tool(t.tool_call.get("tool", ""),
+                                            t.tool_call.get("args", {}),
+                                            session.question)
                 emit(rnd, EventType.tool_result,
-                     {"tool": t.tool_call["tool"], "result": tool_result},
+                     {"tool": t.tool_call.get("tool"), "result": result},
                      agent_id=a.id, parent=tc.id)
-            emit(rnd, EventType.position_update, t.position.model_dump(),
+            delta = round(t.position.score - positions[a.id].score, 2)
+            emit(rnd, EventType.position_update, {**t.position.model_dump(), "delta": delta},
                  agent_id=a.id, influenced=t.influenced_by)
             repo.save_position(session.id, rnd, a.id, t.position)
             positions[a.id] = t.position
@@ -93,12 +93,3 @@ async def run_debate(session: Session, agents: list[Agent], repo,
     stream.close(session.id)
     return verdict
 
-
-async def _maybe_call_tool(tool_call: dict | None, question: str) -> str | None:
-    if not tool_call:
-        return None
-    try:
-        from ..mcp_servers.research import call_tool
-        return await call_tool(tool_call["tool"], tool_call.get("args", {}), question)
-    except Exception:
-        return "[tool unavailable]"

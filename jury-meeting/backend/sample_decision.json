@@ -1,0 +1,71 @@
+{
+  "meeting_id": "mtg_sample",
+  "subject": {
+    "title": "MealMind",
+    "summary": "AI meal-planning app that builds grocery lists from your fridge photos.",
+    "details": {
+      "founders": "Priya Shah (ex-Instacart PM), Tom Reyes (ex-DoorDash engineer)",
+      "traction": "6 weeks live; 1,200 signups, ~140 WAU, no revenue, 9% week-4 retention",
+      "market": "Busy US households, framed as the $900B grocery market",
+      "business_model": "Planned $7/mo subscription + grocery affiliate revenue (not charging yet)",
+      "competition": "Mealime, Samsung Whisk, ChatGPT",
+      "the_ask": "Raising on an $8M cap; wants help with grocery-chain partnerships"
+    }
+  },
+  "verdict": "ELIMINATE",
+  "overall_score": 4.1,
+  "summary": "Strong, relevant founders, but a thin and easily-copied product on top-down market framing, weak early retention, and a pitch that conflates three businesses. Not yet venture-ready.",
+  "jurors": [
+    {
+      "agent_id": "j_market",
+      "name": "Dana Okafor",
+      "role": "Market Partner",
+      "weight": 0.25,
+      "voice_id": null,
+      "stance": "NO",
+      "score": 4,
+      "rationale": "Citing the entire $900B grocery market is top-down and unfocused. The real wedge — people who cook from what's in their fridge — is a thin, hard-to-monetize slice, and Mealime, Whisk, and ChatGPT already serve it for free. No articulated path from the wedge to a venture-scale market."
+    },
+    {
+      "agent_id": "j_team",
+      "name": "Marcus Lee",
+      "role": "Team Partner",
+      "weight": 0.20,
+      "voice_id": null,
+      "stance": "YES",
+      "score": 7,
+      "rationale": "Strong, relevant operators: an ex-Instacart PM and an ex-DoorDash engineer is genuine founder-market fit for grocery. Both first-time founders, but the backgrounds are a real asset. This was the strongest part of the application."
+    },
+    {
+      "agent_id": "j_product",
+      "name": "Elena Vasquez",
+      "role": "Product & Tech Partner",
+      "weight": 0.20,
+      "voice_id": null,
+      "stance": "NO",
+      "score": 4,
+      "rationale": "The fridge-photo-to-recipe loop is a thin feature, not a defensible product. It's directly replicable by ChatGPT with an image upload, and a foundation-model release could subsume the vision step overnight. No data moat or workflow lock-in described."
+    },
+    {
+      "agent_id": "j_traction",
+      "name": "Sam Whitfield",
+      "role": "Traction Partner",
+      "weight": 0.20,
+      "voice_id": null,
+      "stance": "NO",
+      "score": 2,
+      "rationale": "The weakest signal. 9% week-4 retention on a consumer habit product is well below bar, 140 WAU after 6 weeks is light, and there's zero revenue with monetization still hypothetical. No evidence yet that users form a durable habit."
+    },
+    {
+      "agent_id": "j_clarity",
+      "name": "Aisha Bello",
+      "role": "Conviction & Clarity Partner",
+      "weight": 0.15,
+      "voice_id": null,
+      "stance": "NO",
+      "score": 3,
+      "rationale": "The pitch conflates three products (meal planner, grocery list, affiliate marketplace) without a crisp one-sentence wedge. The 'why now' is generic and the ask leads with a valuation cap rather than a sharp insight. Hard to tell in one read what the single most important thing is."
+    }
+  ],
+  "trace_url": "https://wandb.ai/yamanbicer-mindra/company-brain-harness/weave"
+}

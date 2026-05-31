@@ -10,4 +10,8 @@ pydantic-settings
 sse-starlette
 python-dotenv
 httpx
-pyjwt
+pyjwt[crypto]
+
+# dev
+pytest
+pytest-asyncio

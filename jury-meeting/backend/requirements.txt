@@ -1,0 +1,7 @@
+weave>=0.51.0
+openai>=1.40.0
+elevenlabs>=1.0.0
+fastapi>=0.110.0
+uvicorn[standard]>=0.29.0
+python-dotenv>=1.0.0
+supabase>=2.0.0

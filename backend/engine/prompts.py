@@ -31,6 +31,59 @@ Do NOT compute the numeric score yourself — that is calculated from weighted v
 Be neutral and precise; surface conflict rather than smoothing it over.
 """.strip()
 
+ORG_BUILDER_PROMPT = """
+You design panels of expert AI agents that evaluate decisions together. Given a
+domain or panel description, invent 3-5 DISTINCT panelists who would productively
+disagree. For each: a realistic name, a specific role/title, and a rich first-person
+system_prompt (3-5 sentences) defining their expertise, biases, what they optimize
+for, and their voice. Make at least one a skeptic. Assign each a relative weight
+(they need not sum to 1 — they'll be normalized). Return JSON only.
+""".strip()
+
+ORG_BUILDER_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "org_name": {"type": "string"},
+        "description": {"type": "string"},
+        "agents": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "name": {"type": "string"},
+                    "role": {"type": "string"},
+                    "system_prompt": {"type": "string"},
+                    "weight": {"type": "number"},
+                },
+                "required": ["name", "role", "system_prompt", "weight"],
+            },
+        },
+    },
+    "required": ["org_name", "agents"],
+}
+
+# Initial (round 0) position.
+POSITION_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "stance": {"enum": ["YES", "NO", "CONDITIONAL"]},
+        "score": {"type": "number", "minimum": 0, "maximum": 10},
+        "confidence": {"type": "number", "minimum": 0, "maximum": 1},
+        "rationale": {"type": "string"},
+    },
+    "required": ["stance", "score", "confidence", "rationale"],
+}
+
+# Orchestrator's natural-language summary (numbers are computed, not asked for).
+SUMMARY_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "summary": {"type": "string"},
+        "key_agreements": {"type": "array", "items": {"type": "string"}},
+    },
+    "required": ["summary", "key_agreements"],
+}
+
 # Structured output each agent must return per deliberation turn.
 AGENT_TURN_SCHEMA = {
     "type": "object",

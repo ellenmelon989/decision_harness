@@ -1,0 +1,20 @@
+# Secrets — NEVER bake these into the image; Railway injects them as env vars.
+.env
+*.env
+**/.env
+
+# VCS / Python caches
+.git/
+.gitignore
+**/__pycache__/
+*.pyc
+.pytest_cache/
+.venv/
+venv/
+
+# Frontend ships on Vercel, not in the backend image
+frontend/
+node_modules/
+
+# Docs / binaries the runtime doesn't need (personas/ IS needed — kept)
+*.pdf

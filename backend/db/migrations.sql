@@ -7,7 +7,9 @@ create extension if not exists pgcrypto;   -- gen_random_uuid()
 
 create table if not exists orgs (
   id          uuid primary key default gen_random_uuid(),
-  owner_id    uuid references auth.users(id),
+  -- app-level owner (the JWT `sub`). NOT a FK to auth.users so the dev/seed
+  -- DEMO_USER (a synthetic uuid) can own rows; RLS below still scopes by auth.uid().
+  owner_id    uuid,
   name        text not null,
   description text,
   preset      text,                       -- 'vc' | 'board' | 'judges' | null
@@ -32,7 +34,7 @@ create table if not exists agents (
 create table if not exists sessions (
   id               uuid primary key default gen_random_uuid(),
   org_id           uuid not null references orgs(id) on delete cascade,
-  created_by       uuid references auth.users(id),
+  created_by       uuid,                            -- app-level (JWT sub); not a FK (see orgs.owner_id)
   question         text not null,
   context          text,
   weights_override jsonb,                 -- {agent_id: weight} for HITL re-run
@@ -40,7 +42,7 @@ create table if not exists sessions (
   rounds           int default 3,
   final_verdict    jsonb,
   weave_trace_url  text,
-  parent_session   uuid references sessions(id),     -- re-runs / comparison
+  parent_session   uuid references sessions(id) on delete set null,  -- re-runs / comparison
   created_at       timestamptz default now()
 );
 
@@ -50,10 +52,10 @@ create table if not exists events (
   session_id    uuid not null references sessions(id) on delete cascade,
   seq           bigint generated always as identity,
   round         int not null,
-  agent_id      uuid references agents(id),
+  agent_id      uuid references agents(id) on delete cascade,
   type          text not null,
   content       jsonb not null,
-  parent_event  uuid references events(id),
+  parent_event  uuid references events(id) on delete set null,
   influenced_by jsonb default '[]',
   created_at    timestamptz default now()
 );
@@ -108,3 +110,14 @@ create policy positions_owner on positions for all to authenticated
                  where s.id = positions.session_id and o.owner_id = auth.uid()))
   with check (exists (select 1 from sessions s join orgs o on o.id = s.org_id
                       where s.id = positions.session_id and o.owner_id = auth.uid()));
+
+-- ─── self-heal FK delete rules on existing DBs (create-if-not-exists skips column defs) ───
+alter table events drop constraint if exists events_agent_id_fkey;
+alter table events add constraint events_agent_id_fkey
+  foreign key (agent_id) references agents(id) on delete cascade;
+alter table events drop constraint if exists events_parent_event_fkey;
+alter table events add constraint events_parent_event_fkey
+  foreign key (parent_event) references events(id) on delete set null;
+alter table sessions drop constraint if exists sessions_parent_session_fkey;
+alter table sessions add constraint sessions_parent_session_fkey
+  foreign key (parent_session) references sessions(id) on delete set null;

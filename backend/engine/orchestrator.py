@@ -1,7 +1,9 @@
 """Orchestrator: weighted verdict + influence graph (ROADMAP §7.4, §8).
 
-Numbers are REAL (scoring.py). The narrative summary is a MOCK for Hour 0 —
-WS-A replaces `_summarize` with an ORCHESTRATOR_PROMPT LLM call over the transcript.
+Numbers are REAL (scoring.py) and conflicts/dissent are computed structurally from
+the final positions (reliable). The natural-language `summary` + `key_agreements`
+come from an LLM over the transcript when a backend is configured, else a terse
+deterministic fallback.
 """
 from __future__ import annotations
 
@@ -22,7 +24,11 @@ from ..schemas import (
     Position,
     Verdict,
 )
+from .llm import complete_json, resolve_backend
+from .prompts import ORCHESTRATOR_PROMPT, SUMMARY_SCHEMA
 from .scoring import blended_confidence, decision_from_score, weighted_score
+
+_DEFAULT_MODEL = "claude-sonnet-4-6"  # resolve_backend may downgrade to W&B Inference
 
 
 def _influence(agents: list[Agent], events: list[Event]):
