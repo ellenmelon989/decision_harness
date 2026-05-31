@@ -44,6 +44,14 @@ def _coerce_position(data: dict) -> Position:
     )
 
 
+def _pick_caller(agent: Agent):
+    from ..config import get_settings
+    key = get_settings().anthropic_api_key
+    if agent.provider == Provider.anthropic and key and key.startswith("sk-ant-"):
+        return _call_anthropic
+    return _call_wandb_inference
+
+
 # ───────────────────────── round 0 ─────────────────────────
 @weave.op()
 async def agent_position(agent: Agent, question: str, context: Optional[str]) -> Position:
@@ -60,7 +68,7 @@ async def agent_position(agent: Agent, question: str, context: Optional[str]) ->
         },
         "required": ["stance", "score", "confidence", "rationale"],
     }
-    caller = _call_wandb_inference if agent.provider == Provider.wandb else _call_anthropic
+    caller = _pick_caller(agent)
     raw = await caller(agent, system, prompt, schema)
     return Position(**raw)
 
@@ -72,7 +80,7 @@ async def agent_turn(agent: Agent, prev: Position, board: str,
     peer_list = "\n".join(f"- {p.name} (id: {p.id}): {p.role}" for p in peers if p.id != agent.id)
     system = f"You are {agent.name}. Your role: {agent.role}.\n{agent.system_prompt}\n\n{DEBATE_RUBRIC}"
     prompt = f"Round {rnd}. Other panel members:\n{peer_list}\n\nCurrent board state:\n{board}\n\nYour current position: {prev.stance.value} ({prev.score}/10). Take your turn."
-    caller = _call_wandb_inference if agent.provider == Provider.wandb else _call_anthropic
+    caller = _pick_caller(agent)
     raw = await caller(agent, system, prompt, AGENT_TURN_SCHEMA)
     pos = raw["position"]
     if isinstance(pos.get("score"), str):
@@ -111,14 +119,13 @@ async def _call_anthropic(agent: Agent, system: str, prompt: str, schema: dict) 
 
 async def _call_wandb_inference(agent: Agent, system: str, prompt: str, schema: dict) -> dict:
     import json
-    from openai import OpenAI
+    from openai import AsyncOpenAI
     from ..config import get_settings
-    client = OpenAI(
-        base_url="https://api.groq.com/openai/v1",
-        api_key=get_settings().groq_api_key,
-    )
-    response = client.chat.completions.create(
-        model=agent.model,
+    s = get_settings()
+    model = agent.model if agent.model.startswith("llama") else "llama-3.3-70b-versatile"
+    client = AsyncOpenAI(base_url="https://api.groq.com/openai/v1", api_key=s.groq_api_key)
+    response = await client.chat.completions.create(
+        model=model,
         messages=[
             {"role": "system", "content": system},
             {"role": "user", "content": prompt + "\n\nRespond with valid JSON only matching this schema: " + json.dumps(schema)},

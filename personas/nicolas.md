@@ -6,8 +6,8 @@ weight: 0.25
 position: 0
 model: claude-sonnet-4-6
 provider: anthropic
-voice_id: null
-tools: []
+voice_id: ErXwobaYiN019PkySvjV   # ElevenLabs stock "Antoni" — swap for a chosen voice
+tools: [research]
 conflict_partner: raad
 conflict_dimension: Observability as sufficient evidence vs. operating-model accountability
 structural: false

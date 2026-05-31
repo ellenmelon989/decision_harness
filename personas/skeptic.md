@@ -6,8 +6,8 @@ weight: 0.10
 position: 4
 model: claude-sonnet-4-6
 provider: anthropic
-voice_id: null
-tools: []
+voice_id: AZnzlk1XvdvUeBnXmlld   # ElevenLabs stock "Domi" — swap for a chosen voice
+tools: [research]
 conflict_partner: uma
 conflict_dimension: Proven enterprise value vs. unproven generalizability
 structural: true

@@ -1,12 +1,21 @@
 """Pure decision-math tests (no network)."""
 from backend.engine.scoring import (
+    apply_veto_cap,
     blended_confidence,
     consensus,
     decision_from_score,
     normalized_variance,
     weighted_score,
 )
-from backend.schemas import Position, Stance
+from backend.schemas import Agent, Position, Stance
+
+
+def _agent(aid: str, *, veto: bool = False) -> Agent:
+    return Agent(id=aid, org_id="o", name=aid, role="r", system_prompt="", veto=veto)
+
+
+def _pos(stance: Stance) -> Position:
+    return Position(stance=stance, score=5.0, confidence=0.5, rationale="")
 
 
 def test_weighted_score_basic():
@@ -40,3 +49,37 @@ def test_blended_confidence_in_range():
     ps = [Position(stance=Stance.YES, score=7, confidence=0.8, rationale="") for _ in range(3)]
     assert 0.0 <= blended_confidence(ps) <= 1.0
     assert blended_confidence([]) == 0.0
+
+
+# ── veto cap: a structural skeptic can block a clean YES, not force a NO ──
+
+def test_veto_agent_not_convinced_caps_yes_to_conditional():
+    agents = [_agent("opt"), _agent("skeptic", veto=True)]
+    positions = {"opt": _pos(Stance.YES), "skeptic": _pos(Stance.NO)}
+    assert apply_veto_cap(Stance.YES, agents, positions) == Stance.CONDITIONAL
+
+
+def test_veto_agent_conditional_also_caps_yes():
+    agents = [_agent("skeptic", veto=True)]
+    positions = {"skeptic": _pos(Stance.CONDITIONAL)}
+    assert apply_veto_cap(Stance.YES, agents, positions) == Stance.CONDITIONAL
+
+
+def test_veto_agent_convinced_does_not_cap():
+    agents = [_agent("skeptic", veto=True)]
+    positions = {"skeptic": _pos(Stance.YES)}
+    assert apply_veto_cap(Stance.YES, agents, positions) == Stance.YES
+
+
+def test_no_veto_agent_never_caps():
+    agents = [_agent("a"), _agent("b")]
+    positions = {"a": _pos(Stance.YES), "b": _pos(Stance.NO)}
+    assert apply_veto_cap(Stance.YES, agents, positions) == Stance.YES
+
+
+def test_veto_cannot_force_a_no_down_or_lift_a_no():
+    # The cap only ever softens a YES; it never touches NO/CONDITIONAL verdicts.
+    agents = [_agent("skeptic", veto=True)]
+    positions = {"skeptic": _pos(Stance.NO)}
+    assert apply_veto_cap(Stance.NO, agents, positions) == Stance.NO
+    assert apply_veto_cap(Stance.CONDITIONAL, agents, positions) == Stance.CONDITIONAL

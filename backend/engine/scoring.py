@@ -36,6 +36,21 @@ def decision_from_score(score: float) -> Stance:
     return Stance.NO
 
 
+def apply_veto_cap(decision: Stance, agents, positions: dict[str, Position]) -> Stance:
+    """A structural 'veto' agent (e.g. the Skeptic) can block a clean win but not
+    force a loss: if any veto agent is not itself convinced (its final stance is
+    not YES), a YES verdict is capped down to CONDITIONAL. NO/CONDITIONAL verdicts
+    pass through untouched."""
+    if decision != Stance.YES:
+        return decision
+    for a in agents:
+        if getattr(a, "veto", False):
+            p = positions.get(a.id)
+            if p and p.stance != Stance.YES:
+                return Stance.CONDITIONAL
+    return decision
+
+
 def blended_confidence(positions: list[Position]) -> float:
     """Half consensus, half average self-reported confidence."""
     if not positions:

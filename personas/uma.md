@@ -6,8 +6,8 @@ weight: 0.25
 position: 1
 model: claude-sonnet-4-6
 provider: anthropic
-voice_id: null
-tools: []
+voice_id: 21m00Tcm4TlvDq8ikWAM   # ElevenLabs stock "Rachel" — swap for a chosen voice
+tools: [research]
 conflict_partner: skeptic
 conflict_dimension: Proven enterprise value vs. unproven generalizability
 structural: false

@@ -17,7 +17,8 @@ export interface Position {
 export interface Agent {
   id: string; org_id: string; name: string; role: string; system_prompt: string;
   model: string; provider: Provider; weight: number; voice_id?: string | null;
-  tools: string[]; position: number; created_at?: string;
+  tools: string[]; position: number; structural: boolean; veto: boolean;
+  created_at?: string;
 }
 
 export interface Org {

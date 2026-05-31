@@ -49,9 +49,7 @@ function LoginForm() {
       return;
     }
     if (mode === "up") {
-      setNotice(
-        "Account created. If email confirmation is enabled in Supabase, check your inbox — otherwise you're signed in.",
-      );
+      setNotice("Account created — signing you in…");
     }
   }
 

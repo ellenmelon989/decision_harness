@@ -22,10 +22,8 @@ async def _llm_research(args: dict, question: str) -> str:
     from ..config import get_settings
 
     query = args.get("query") or args.get("question") or json.dumps(args)
-    client = AsyncOpenAI(
-        base_url="https://api.groq.com/openai/v1",
-        api_key=get_settings().groq_api_key,
-    )
+    s = get_settings()
+    client = AsyncOpenAI(base_url="https://api.groq.com/openai/v1", api_key=s.groq_api_key)
     response = await client.chat.completions.create(
         model="llama-3.3-70b-versatile",
         messages=[

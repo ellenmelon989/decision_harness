@@ -20,10 +20,8 @@ async def generate_org_agents(prompt: str) -> tuple[str, str, list[AgentCreate]]
 
     from ..config import get_settings
 
-    client = AsyncOpenAI(
-        base_url="https://api.groq.com/openai/v1",
-        api_key=get_settings().groq_api_key,
-    )
+    s = get_settings()
+    client = AsyncOpenAI(base_url="https://api.groq.com/openai/v1", api_key=s.groq_api_key)
     response = await client.chat.completions.create(
         model="llama-3.3-70b-versatile",
         messages=[

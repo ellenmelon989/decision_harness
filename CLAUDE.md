@@ -53,7 +53,7 @@ In-process `asyncio.Queue` pub/sub. `POST /sessions` kicks off the debate as a b
 `get_repo()` returns `SupabaseRepository` or `InMemoryRepository` behind one interface. Routers never know which is live. The Supabase client uses the **service key and bypasses RLS** — ownership is enforced in `deps.py`, where guards return **404 (not 403)** so resource existence isn't leaked.
 
 ### Persona seeding
-Each [personas/](personas/)`*.md` / `*.txt` file becomes one agent; the **entire file text is the agent's `system_prompt`**. The header parser ([backend/db/seed.py](backend/db/seed.py)) is loose and only seeds the in-memory demo org.
+Each [personas/](personas/)`*.md` file becomes one agent. The loader ([backend/db/seed.py](backend/db/seed.py)) reads the file's **YAML frontmatter** (`name`, `role`, `weight`, `position`, `model`, `provider`, `voice_id`, `tools`, `structural`; `veto` is set when an agent declares `veto: true` or carries a `cap_rule` block) to configure the agent, and uses the body — **with the fenced "demo-prep reference" block and HTML comments stripped** — as the `system_prompt`. That demo-prep block is the answer key (predicted scores / "natural verdict") and must never reach the model. `seed_judge_panel` runs both for the in-memory demo org and on first login (`POST /orgs/ensure-seed`). A `veto` agent (the Skeptic) caps a clean YES to CONDITIONAL via `apply_veto_cap` in the orchestrator. Frontmatter keys with no schema field (`conflict_partner`, `conflict_dimension`, `cap_rule.unlock_condition`, …) are not yet wired in.
 
 ## Commands
 
@@ -81,7 +81,7 @@ There are two parallel ways to apply the schema (same DDL, ROADMAP §4):
 - [backend/db/migrations.sql](backend/db/migrations.sql) via `python -m backend.db.migrate` (the one wired to the app/repository).
 - [supabase/migrations/](supabase/migrations/) (timestamped) via the Supabase CLI `supabase db push`.
 
-Keep them in sync if you change the schema. Auth verifies user JWTs against the project's published JWKS (ES256/RS256) — there is no shared JWT secret; verification is keyed off `SUPABASE_URL`.
+Keep them in sync if you change the schema. **When adding a foreign key, set its `ON DELETE` rule** or deleting a parent row FK-violates: `events.agent_id` → `cascade`, `events.parent_event` / `sessions.parent_session` → `set null`; `owner_id` / `created_by` are plain `uuid` (deliberately **not** FKs to `auth.users`, so the synthetic DEMO_USER can own rows). `migrations.sql` ends with self-healing `ALTER`s that re-apply these rules on existing DBs. Auth verifies user JWTs against the project's published JWKS (ES256/RS256) — there is no shared JWT secret; verification is keyed off `SUPABASE_URL`.
 
 ## Infrastructure is managed via CLI, not dashboards
 
@@ -101,8 +101,8 @@ The **Vercel**, **Supabase**, and **Railway** CLIs are all installed and logged 
 
 - **Use `127.0.0.1`, not `localhost`**, for the API URL. macOS resolves `localhost` to IPv6 `::1` first, but uvicorn binds IPv4-only by default → `TypeError: Failed to fetch`. This is baked into `API_URL` defaults and the `.env.example` files.
 - **Railway runs `startCommand` without a shell** → keep the `sh -c "... --port ${PORT:-8000}"` wrapper in [railway.json](railway.json) + the `PORT` service var, or uvicorn gets a literal `$PORT` and crash-loops the healthcheck. `weave.init()` runs in a daemon thread ([main.py](main.py)) so it can't block uvicorn from serving `/health` during the healthcheck window.
-- **Supabase email confirmation is ON** — UI signups don't get a session until the emailed link is clicked. Disabling it (`mailer_autoconfirm`) is the one infra setting the service key / CLIs can't change (needs the Management API token in the macOS Keychain) — a real exception to "manage via CLI."
-- **Auth smoke tests:** Supabase rejects `@example.com`; use `@gmail.com`, and mint a pre-confirmed user with `POST {SUPABASE_URL}/auth/v1/admin/users` `{"email_confirm":true}` (service key), then password-grant for a real ES256 token.
+- **Supabase email confirmation is OFF** (disabled 2026-06-01 so demo signups get a session instantly and don't trip the built-in email cap of **2 emails/hr, project-wide**, which is raisable only via custom SMTP — that cap is what surfaced `email rate limit exceeded` on the signup form). Password auth is unaffected; confirmation is an independent gate. Don't try to re-toggle it from code/CLI: `supabase config` has only `push` (a whole-`config.toml` sync, no `pull` to baseline → would clobber other live auth settings), and the CLI's macOS-Keychain credential (`Supabase CLI`/`supabase`) is an OAuth **session** token, *not* a Management API PAT (`sbp_…`) — it 401s ("JWT could not be decoded") against `api.supabase.com`. Script it with a PAT (supabase.com/dashboard/account/tokens) → `PATCH /v1/projects/<ref>/config/auth {"mailer_autoconfirm":true}`, or just use the dashboard (Auth → Sign In/Providers → Email).
+- **Auth smoke tests:** mint a pre-confirmed user with `POST {SUPABASE_URL}/auth/v1/admin/users` `{"email_confirm":true}` (service key), then password-grant for a real ES256 token. Admin-create **accepts `@example.com`** — it bypasses email validation (verified end-to-end); only the public `signUp` form rejects look-alike domains. `python -m backend.db.integration_smoke` runs the whole flow (login → ensure-seed → debate → IDOR) and self-cleans.
 - **zsh reserves `$UID`** — never assign to `UID` in a Bash-tool script (throws "bad math expression"); use another name.
 - `pytest.ini` sets `asyncio_mode = auto`, so `async def test_*` runs without an explicit marker.
 - Tests force mock mode by monkeypatching `resolve_backend` to return `None` — keep new engine code routing through `resolve_backend` so it stays testable offline.

@@ -28,8 +28,14 @@ create table if not exists agents (
   voice_id      text,                     -- ElevenLabs voice id
   tools         jsonb default '[]',       -- ["research","company_data","wandb"]
   position      int default 0,            -- seat order in the boardroom
+  structural    boolean not null default false,  -- pinned seat (e.g. the Skeptic)
+  veto          boolean not null default false,  -- can cap a clean YES to CONDITIONAL
   created_at    timestamptz default now()
 );
+-- Idempotent for DBs created before these columns existed (create-if-not-exists
+-- above is a no-op once the table is present).
+alter table agents add column if not exists structural boolean not null default false;
+alter table agents add column if not exists veto       boolean not null default false;
 
 create table if not exists sessions (
   id               uuid primary key default gen_random_uuid(),

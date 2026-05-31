@@ -6,8 +6,8 @@ weight: 0.20
 position: 3
 model: claude-sonnet-4-6
 provider: anthropic
-voice_id: null
-tools: []
+voice_id: TxGEqnHWrfWFTfGW9XjX   # ElevenLabs stock "Josh" — swap for a chosen voice
+tools: [research]
 conflict_partner: nicolas
 conflict_dimension: Observability as sufficient evidence vs. operating-model accountability
 structural: false

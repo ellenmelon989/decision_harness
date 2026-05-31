@@ -11,10 +11,10 @@ export const MOCK_ORG: Org = {
 };
 
 export const MOCK_AGENTS: Agent[] = [
-  { id: "a1", org_id: "org-demo", name: "The Architect", role: "Systems & Technical Merit", system_prompt: "", model: "claude-opus-4-8", provider: "anthropic", weight: 1.4, tools: ["research"], position: 0 },
-  { id: "a2", org_id: "org-demo", name: "The Pragmatist", role: "Product & Feasibility", system_prompt: "", model: "claude-sonnet-4-6", provider: "anthropic", weight: 1.0, tools: ["company_data"], position: 1 },
-  { id: "a3", org_id: "org-demo", name: "The Skeptic", role: "Risk & Red Team", system_prompt: "", model: "meta-llama/Llama-3.1-8B-Instruct", provider: "wandb", weight: 1.2, tools: ["research"], position: 2 },
-  { id: "a4", org_id: "org-demo", name: "The Visionary", role: "Strategy & Upside", system_prompt: "", model: "claude-sonnet-4-6", provider: "anthropic", weight: 0.9, tools: [], position: 3 },
+  { id: "a1", org_id: "org-demo", name: "The Architect", role: "Systems & Technical Merit", system_prompt: "", model: "claude-opus-4-8", provider: "anthropic", weight: 1.4, tools: ["research"], position: 0, structural: false, veto: false },
+  { id: "a2", org_id: "org-demo", name: "The Pragmatist", role: "Product & Feasibility", system_prompt: "", model: "claude-sonnet-4-6", provider: "anthropic", weight: 1.0, tools: ["company_data"], position: 1, structural: false, veto: false },
+  { id: "a3", org_id: "org-demo", name: "The Skeptic", role: "Risk & Red Team", system_prompt: "", model: "meta-llama/Llama-3.1-8B-Instruct", provider: "wandb", weight: 1.2, tools: ["research"], position: 2, structural: true, veto: true },
+  { id: "a4", org_id: "org-demo", name: "The Visionary", role: "Strategy & Upside", system_prompt: "", model: "claude-sonnet-4-6", provider: "anthropic", weight: 0.9, tools: [], position: 3, structural: false, veto: false },
 ];
 
 export const MOCK_QUESTION = "Should this project win Most Sophisticated Harness?";

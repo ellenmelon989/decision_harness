@@ -22,11 +22,12 @@ from ..schemas import (
     InfluenceNode,
     InfluenceScore,
     Position,
+    Stance,
     Verdict,
 )
 from .llm import complete_json, resolve_backend
 from .prompts import ORCHESTRATOR_PROMPT, SUMMARY_SCHEMA
-from .scoring import blended_confidence, decision_from_score, weighted_score
+from .scoring import apply_veto_cap, blended_confidence, decision_from_score, weighted_score
 
 _DEFAULT_MODEL = "claude-sonnet-4-6"  # resolve_backend may downgrade to W&B Inference
 
@@ -127,10 +128,8 @@ async def _summarize(agents: list[Agent], events: list[Event]) -> dict:
     by_id = {a.id: a for a in agents}
 
     from ..config import get_settings
-    client = OpenAI(
-        base_url="https://api.groq.com/openai/v1",
-        api_key=get_settings().groq_api_key,
-    )
+    s = get_settings()
+    client = OpenAI(base_url="https://api.groq.com/openai/v1", api_key=s.groq_api_key)
     response = client.chat.completions.create(
         model="llama-3.3-70b-versatile",
         messages=[
@@ -187,10 +186,23 @@ async def orchestrate_verdict(agents: list[Agent], final_positions: dict[str, Po
                               weights: dict[str, float], events: list[Event]) -> Verdict:
     scores = {aid: p.score for aid, p in final_positions.items()}
     weighted = round(weighted_score(scores, weights), 2)
+    base = decision_from_score(weighted)
+    decision = apply_veto_cap(base, agents, final_positions)
     ranking, _ = _influence(agents, events)
     summary = await _summarize(agents, events)
+    if decision != base:
+        vetoed_by = ", ".join(
+            a.name for a in agents
+            if getattr(a, "veto", False)
+            and (p := final_positions.get(a.id)) and p.stance != Stance.YES
+        )
+        summary["summary"] = (
+            f"{summary['summary']} Capped at {decision.value}: {vetoed_by} holds a "
+            "structural veto and is not convinced, so a clean YES is blocked until "
+            "the veto's unlock condition is met."
+        ).strip()
     return Verdict(
-        decision=decision_from_score(weighted),
+        decision=decision,
         weighted_score=weighted,
         confidence=blended_confidence(list(final_positions.values())),
         influence_ranking=ranking,

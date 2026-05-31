@@ -42,3 +42,21 @@ def test_org_builder_fallback_team():
     spec = _fallback_team("a biotech seed investment committee")
     assert spec["agents"]
     assert abs(sum(a.weight for a in spec["agents"]) - 1.0) < 0.02  # normalized (3dp rounding)
+
+
+async def test_veto_agent_caps_a_clean_yes_in_the_verdict():
+    from backend.engine.orchestrator import orchestrate_verdict
+    from backend.schemas import Agent, Position, Stance
+
+    optimist = Agent(id="opt", org_id="o", name="Optimist", role="r", system_prompt="")
+    skeptic = Agent(id="skep", org_id="o", name="Skeptic", role="r", system_prompt="", veto=True)
+    positions = {
+        "opt": Position(stance=Stance.YES, score=9.0, confidence=0.9, rationale=""),
+        "skep": Position(stance=Stance.NO, score=2.0, confidence=0.9, rationale=""),
+    }
+    weights = {"opt": 0.9, "skep": 0.1}  # weighted score 8.3 → would be a clean YES
+
+    verdict = await orchestrate_verdict([optimist, skeptic], positions, weights, events=[])
+
+    assert verdict.weighted_score >= 7.0          # the raw math says YES
+    assert verdict.decision == Stance.CONDITIONAL  # but the unconvinced veto caps it

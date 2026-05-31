@@ -92,6 +92,8 @@ class Agent(BaseModel):
     voice_id: Optional[str] = None
     tools: list[str] = []
     position: int = 0                     # seat order in the boardroom
+    structural: bool = False              # cannot be removed/re-weighted away (e.g. the Skeptic)
+    veto: bool = False                    # blocks a clean YES unless it too is convinced
     created_at: Optional[datetime] = None
 
 
@@ -153,6 +155,8 @@ class AgentCreate(BaseModel):
     voice_id: Optional[str] = None
     tools: list[str] = []
     position: int = 0
+    structural: bool = False
+    veto: bool = False
 
 
 class AgentUpdate(BaseModel):
@@ -165,6 +169,8 @@ class AgentUpdate(BaseModel):
     voice_id: Optional[str] = None
     tools: Optional[list[str]] = None
     position: Optional[int] = None
+    structural: Optional[bool] = None
+    veto: Optional[bool] = None
 
 
 class CreateSessionRequest(BaseModel):

@@ -6,8 +6,8 @@ weight: 0.20
 position: 2
 model: claude-sonnet-4-6
 provider: anthropic
-voice_id: null
-tools: []
+voice_id: pNInz6obpgDQGcFmaJgB   # ElevenLabs stock "Adam" — swap for a chosen voice
+tools: [research]
 conflict_partner: uma
 conflict_dimension: Adoption momentum & boldness vs. evidentiary rigor
 structural: false
